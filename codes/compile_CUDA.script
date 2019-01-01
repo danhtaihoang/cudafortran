@@ -1,0 +1,4 @@
+#!/bin/sh
+
+pgf90 -Mcuda increment.cuf
+#

@@ -1,0 +1,158 @@
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!  
+MODULE monte_carlo
+IMPLICIT NONE
+
+      CONTAINS
+!!!=======================================================================================
+!!!=======================================================================================
+      ATTRIBUTES(GLOBAL) SUBROUTINE average_thermal(E_av,M_av,Cv,Td,rdn) 
+      IMPLICIT NONE
+      
+      INTEGER (KIND=8),PARAMETER :: nx=10,ny=10,nz=10,nT=201
+
+      REAL    (KIND=8),INTENT(OUT),DIMENSION(nT):: E_av,M_av,Cv     
+      INTEGER (KIND=8) :: iT,i_av
+      INTEGER (KIND=8) :: i,j,k,ip,im,jp,jm,kp,km,i_rdn
+
+      REAL    (KIND=8) :: energy,real_na,E_tmp1,E_tmp2,S_tmp,M  	
+	      
+      INTEGER (KIND=8),PARAMETER :: n_average=5000,N_rdn=100000000
+      REAL    (KIND=8),DIMENSION(0:nx+1,0:ny+1,0:nz+1) :: S
+      REAL    (KIND=8),DIMENSION(nT) :: E2_av,M2_av
+
+      REAL (KIND=8),device,INTENT(IN) :: rdn(N_rdn)
+      REAL (KIND=8),device,INTENT(IN) :: Td(nT)
+
+      !!!================================================================= 
+      real_na=real(nx*ny*nz)
+      S(:,:,:)=0. 
+      S(1:nx,1:ny,1:nz)=1.
+
+      iT=threadIdx%x 
+ 
+      E_av(:)=0. ; M_av(:)=0. ; E2_av(:)=0. ; M2_av(:)=0.
+      i_rdn=0
+
+      DO i_av=1,n_average
+	 energy=0. ; M=0.
+         DO k=1,nz
+         kp=k+1 ; km=k-1
+	    DO j=1,ny
+	    jp=j+1 ; jm=j-1
+         	DO i=1,nx
+         	ip=i+1 ; im=i-1
+	        i_rdn=i_rdn+1
+
+		E_tmp1=-S(i,j,k)*(S(ip,j,k)+S(im,j,k)+S(i,jp,k)+S(i,jm,k)+S(i,j,kp)+S(i,j,km))
+                E_tmp2=-E_tmp1
+                S_tmp=S(i,j,k) 
+
+                IF (exp(-(E_tmp2-E_tmp1)/Td(iT)) > rdn(i_rdn)) THEN
+                  S(i,j,k)=-S_tmp
+                  E_tmp1=E_tmp2
+                END IF
+
+                energy=energy+E_tmp1
+                M=M+S(i,j,k)  
+	 	END DO
+	     END DO
+         END DO 
+	 energy=energy/real_na/2.
+         M=abs(M)/real_na
+ 
+         E_av(iT)=E_av(iT)+energy
+         M_av(iT)=M_av(iT)+M
+
+         E2_av(iT)=E2_av(iT)+energy*energy
+         M2_av(iT)=M2_av(iT)+M*M
+
+      END DO
+
+      E_av(iT)=E_av(iT)/real(n_average)
+      M_av(iT)=M_av(iT)/real(n_average)
+      E2_av(iT)=E2_av(iT)/real(n_average)
+      M2_av(iT)=M2_av(iT)/real(n_average)          
+
+      Cv(iT) = real_na*(E2_av(iT)-E_av(iT)**2.)/(Td(iT)**2.)
+
+      END SUBROUTINE average_thermal
+!!!=======================================================================================
+      SUBROUTINE ini_rdm_number(seed)
+      IMPLICIT NONE
+      
+      INTEGER (KIND=8),DIMENSION(8) :: time
+      INTEGER (KIND=8),DIMENSION(50) :: seed
+
+      CALL DATE_AND_TIME(values=time) 
+      seed(1) = time(4)*(360000*time(5) + 6000*time(6) + 100*time(7) + time(8))
+      CALL RANDOM_SEED(PUT=seed)
+
+      END SUBROUTINE ini_rdm_number
+
+END MODULE monte_carlo
+
+!!!=======================================================================================
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%! 
+      PROGRAM main_pro
+      USE cudafor                                                  
+      USE monte_carlo
+      USE curand_m
+
+      IMPLICIT NONE
+      INTEGER (KIND=8),PARAMETER :: nT=201
+      INTEGER (KIND=8),PARAMETER :: N_rdn=100000000
+      REAL    (KIND=8),PARAMETER :: Tmin=2.,Tmax=6.     
+      CHARACTER (256)    :: Ligne20 
+
+      INTEGER (KIND=8) :: iT,i_rdn,i_av
+      INTEGER (KIND=8) :: gen,seed1
+      REAL    (KIND=8) :: delT
+
+      REAL (KIND=8),DIMENSION(nT) :: T,E_av,M_av,Cv
+      INTEGER (KIND=8),DIMENSION(50) :: seed
+      REAL (KIND=8),device,DIMENSION(nT) :: Ed_av,Td,Md_av,Cvd
+      REAL (KIND=8),device,DIMENSION(N_rdn) :: rdn
+
+      !!!========================================================== 
+
+      !!! Generate pseudo random number -------------------------
+      CALL curandCreateGenerator(gen,CURAND_RNG_PSEUDO_DEFAULT)
+      CALL ini_rdm_number(seed)
+      seed1=seed(1)
+      CALL curandSetPseudoRandomGeneratorSeed(gen,seed1)
+      CALL curandGenerateUniform(gen,rdn,N_rdn)
+    
+      IF (nT==1) THEN
+            delT=0.
+      ELSE
+            delT=(Tmax-Tmin)/real(nT-1)
+      END IF
+
+      DO iT=1,nT
+            T(iT)=Tmin+delT*real(iT-1)
+            !seed2(iT)=seed(1)+iT
+            !CALL curandSetPseudoRandomGeneratorSeed(gen,seed2(iT))
+            !CALL curandGenerateUniform(gen,rdn,N_rdn)
+      END DO
+  
+      Ed_av=E_av ; Md_av=M_av ; Cvd=Cv ; Td=T  !!! Host to Divice transpers      
+      CALL average_thermal<<<1,nT>>>(Ed_av,Md_av,Cvd,Td,rdn)      
+      E_av=Ed_av ; M_av=Md_av ; Cv=Cvd ; T=Td  !! Device to Host transpers
+      
+      OPEN(unit=20,file='GPU_result.dat')   
+      DO iT=1,nT
+            !WRITE(20,*) T(iT),E_av(iT),M_av(iT),Cv(iT)
+            WRITE(*,*) T(iT),E_av(iT),M_av(iT),Cv(iT)
+            WRITE(Ligne20,*) T(iT),E_av(iT),M_av(iT),Cv(iT)
+            WRITE(20,'(a)') trim(Ligne20)
+      END DO 
+
+      CLOSE(20)
+      
+      ! Destroy the generator
+      CALL curandDestroyGenerator(gen)
+
+      END PROGRAM main_pro
+      

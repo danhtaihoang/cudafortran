@@ -1,0 +1,70 @@
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!  
+MODULE sum_random_number
+IMPLICIT NONE
+
+      CONTAINS
+!!!=======================================================================================
+!!!=======================================================================================
+      ATTRIBUTES(GLOBAL) SUBROUTINE average_thermal(E) 
+      IMPLICIT NONE
+      
+      REAL    (KIND=8),INTENT(INOUT):: E(:)     
+      INTEGER (KIND=8) :: iT,i	      
+      REAL    (KIND=8) :: rdn
+      INTEGER (KIND=8),PARAMETER :: n=10,N_rdn=200
+
+      !REAL (KIND=8),device :: deviceData (N_rdn)
+
+      iT=threadIdx%x 
+ 
+      E(iT)=0.
+      DO i=1,n
+            E(iT)=E(iT)+deviceData(i)
+      END DO
+                
+      END SUBROUTINE average_thermal
+
+END MODULE sum_random_number
+
+!!!=======================================================================================
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%! 
+      PROGRAM main_sum
+      USE cudafor                                                  
+      USE sum_random_number
+      USE curand_m
+
+      IMPLICIT NONE
+      INTEGER (KIND=8),PARAMETER :: nT=11
+      REAL (KIND=8),DEVICE :: Ed(nT)
+      REAL (KIND=8) :: E(nT)
+      INTEGER (KIND=8) :: iT
+
+      INTEGER (KIND=8),PARAMETER :: N_rdn=200
+
+      REAL (KIND=8),device :: deviceData(N_rdn)
+      INTEGER (KIND=8) :: gen,seed
+
+      CALL curandCreateGenerator(gen,CURAND_RNG_PSEUDO_DEFAULT)
+      seed=1234
+      CALL curandSetPseudoRandomGeneratorSeed(gen,seed)
+      CALL curandGenerateUniform (gen,deviceData, N_rdn)
+
+      Ed=E   !!! Host to Divice transpers      
+      CALL average_thermal<<<1,nT>>>(Ed)      
+      E=Ed    !! Device to Host transpers
+      
+      OPEN(unit=20,file='average_thermal.dat')   
+      DO iT=1,nT
+            WRITE(20,*) iT,E(iT)
+            WRITE(*,*) iT,E(iT)
+      END DO 
+
+      CLOSE(20)
+      
+      ! Destroy the generator
+      CALL curandDestroyGenerator(gen)
+
+      END PROGRAM main_sum
+      

@@ -1,0 +1,5 @@
+#!/bin/sh
+rm *.mod
+rm *.o
+pgf90 -Mcuda -Minfo -Mpreprocess curand_m.cuf 1main_CUDA.cuf -lcurand
+

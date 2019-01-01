@@ -1,0 +1,36 @@
+! Generate N random numbers on GPU , copy them back to CPU
+! and print the first 4
+
+module call_rdn
+use curand_m
+IMPLICIT NONE
+
+REAL (KIND=8), allocatable :: hostData (:)
+REAL (KIND=8), allocatable,device :: deviceData (:)
+INTEGER (KIND=8) :: gen,N,seed
+
+! Define how many numbers we want to generate
+N=200
+! Allocate array on CPU
+ALLOCATE(hostData(N))
+! Allocate array on GPU
+ALLOCATE(deviceData (N))
+
+! Create pseudonumber generator
+CALL curandCreateGenerator(gen,CURAND_RNG_PSEUDO_DEFAULT)
+! Set seed
+seed=1234
+CALL curandSetPseudoRandomGeneratorSeed(gen,seed)
+! Generate N floats on device
+CALL curandGenerateUniform (gen,deviceData, N)
+! Copy the data back to CPU
+hostData = deviceData
+! print the first 4 of the sequence
+WRITE(*,*) hostData(1:4)
+! Deallocate data on CPU and GPU
+DEALLOCATE(hostData)
+DEALLOCATE(deviceData)
+! Destroy the generator
+CALL curandDestroyGenerator(gen)
+
+end module call_rdn

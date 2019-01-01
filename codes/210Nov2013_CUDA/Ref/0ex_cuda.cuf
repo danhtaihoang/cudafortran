@@ -1,0 +1,112 @@
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!  
+MODULE monter_carlo
+IMPLICIT NONE
+
+      CONTAINS
+!!!=======================================================================================
+!!!=======================================================================================
+      ATTRIBUTES(GLOBAL) SUBROUTINE average_thermal(E) 
+      USE curand_m        
+              
+      IMPLICIT NONE
+      REAL    (KIND=8),INTENT(INOUT):: E(:)     
+      INTEGER (KIND=8) :: iT,i	      
+      REAL    (KIND=8) :: rdn
+
+      INTEGER (KIND=8),PARAMETER :: n=10,N_rdn=200
+      INTEGER (KIND=8) :: gen,seed
+
+      REAL (KIND=8),device :: deviceData (N_rdn)
+
+      ! Create pseudonumber generator
+      CALL curandCreateGenerator(gen,CURAND_RNG_PSEUDO_DEFAULT)
+      ! Set seed
+      seed=1234
+      CALL curandSetPseudoRandomGeneratorSeed(gen,seed)
+      ! Generate N floats on device
+      CALL curandGenerateUniform (gen,deviceData, N_rdn)
+      ! Copy the data back to CPU
+      !hostData = deviceData
+      ! print the first 4 of the sequence
+      !WRITE(*,*) hostData(1:4)
+
+
+
+
+
+
+
+
+
+      iT=threadIdx%x     
+ 
+      E(iT)=0.
+      DO i=1,n
+            !CALL random_number(rdn)
+            E(iT)=E(iT)+deviceData(i)
+           ! E(iT)=E(iT)+1.  
+     END DO
+            
+      END SUBROUTINE average_thermal
+
+END MODULE monter_carlo
+
+!!!=======================================================================================
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%! 
+      PROGRAM main_ising
+      USE cudafor                                                  
+      USE monter_carlo
+     ! USE curand_m
+
+      IMPLICIT NONE
+      INTEGER (KIND=8),PARAMETER :: nT=11
+      REAL (KIND=8),DEVICE :: Ed(nT)
+      REAL (KIND=8) :: E(nT)
+      INTEGER (KIND=8) :: iT
+
+      !REAL (KIND=8), allocatable :: hostData (:)
+      !REAL (KIND=8), allocatable,device :: deviceData (:)
+      !INTEGER (KIND=8) :: gen,seed
+
+      ! Allocate array on CPU
+     ! ALLOCATE(hostData(N_rdn))
+      ! Allocate array on GPU
+      !ALLOCATE(deviceData (N_rdn))
+
+      ! Create pseudonumber generator
+      !CALL curandCreateGenerator(gen,CURAND_RNG_PSEUDO_DEFAULT)
+      ! Set seed
+      !seed=1234
+      !CALL curandSetPseudoRandomGeneratorSeed(gen,seed)
+      ! Generate N floats on device
+      !CALL curandGenerateUniform (gen,deviceData, N_rdn)
+      ! Copy the data back to CPU
+      !hostData = deviceData
+      ! print the first 4 of the sequence
+      !WRITE(*,*) hostData(1:4)
+
+      Ed=E   !!! Host to Divice transpers      
+      CALL average_thermal<<<1,nT>>>(Ed)      
+      E=Ed    !! Device to Host transpers
+      
+      OPEN(unit=20,file='average_thermal.dat')   
+      DO iT=1,nT
+            WRITE(20,*) iT,E(iT)
+            WRITE(*,*) iT,E(iT)
+      END DO 
+
+      CLOSE(20)
+      
+      ! Deallocate data on CPU and GPU
+      !DEALLOCATE(hostData)
+      !DEALLOCATE(deviceData)
+      ! Destroy the generator
+      !CALL curandDestroyGenerator(gen)
+
+!!!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+      END PROGRAM main_ising
+    
+  

@@ -1,0 +1,28 @@
+#!/bin/sh
+
+gnuplot -persist << EOF
+set term postscript enhanced color "Times-Roman" 12
+set autoscale
+set key right top
+set pointsize 1.1
+set xlabel "T"
+set ylabel "E"
+set output "compare_E.eps"
+plot "GPU_result.dat" u 1:2 t "GPU" w p lt 1 pt 11,\
+"CPU_result.dat" u 1:2 t "CPU" w p lt -1 pt 7
+
+EOF
+
+gnuplot -persist << EOF
+set term postscript enhanced color "Times-Roman" 12
+set autoscale
+set key right top
+set pointsize 1.1
+set xlabel "T"
+set ylabel "M"
+set output "compare_M.eps"
+plot "GPU_result.dat" u 1:3 t "GPU" w p lt 1 pt 11,\
+"CPU_result.dat" u 1:3 t "CPU" w p lt -1 pt 7
+
+EOF
+

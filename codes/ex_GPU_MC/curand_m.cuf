@@ -1,0 +1,58 @@
+module curand_m
+
+integer,public :: CURAND_RNG_PSEUDO_DEFAULT=100
+integer,public :: CURAND_RNG_PSEUDO_XORWOW=101
+integer,public :: CURAND_RNG_QUASI_DEFAULT=200
+integer,public :: CURAND_RNG_QUASI_SOBOL=201
+
+!!!=============================================================
+interface curandCreateGenerator
+subroutine curandCreateGenerator(generator,rng_type) &
+         bind(C,name ='curandCreateGenerator')
+use iso_c_binding
+integer(c_size_t):: generator
+integer(c_int),value :: rng_type
+end subroutine curandCreateGenerator
+end interface
+
+!!!=============================================================
+interface curandSetPseudoRandomGeneratorSeed
+subroutine curandSetPseudoRandomGeneratorSeed(generator,seed) &
+bind(C,name='curandSetPseudoRandomGeneratorSeed')
+use iso_c_binding
+integer (c_size_t),value :: generator
+integer (c_long_long),value :: seed
+end subroutine curandSetPseudoRandomGeneratorSeed
+end interface
+
+!!!=============================================================
+interface curandGenerateUniform
+subroutine curandGenerateUniform(generator,odata,numele) &
+bind(C,name ='curandGenerateUniform')
+use iso_c_binding
+integer (c_size_t),value :: generator
+! pgi$ ignore_tkr ( tr ) odata
+real (c_float),device :: odata (*)
+integer (c_size_t),value :: numele
+end subroutine curandGenerateUniform
+
+subroutine curandGenerateUniformDouble(generator,odata,numele) &
+bind(C,name ='curandGenerateUniformDouble')
+use iso_c_binding
+integer (c_size_t),value :: generator
+! pgi$ ignore_tkr ( tr ) odata
+real(c_double),device :: odata (*)
+integer(c_size_t) , value :: numele
+end subroutine curandGenerateUniformDouble
+end interface
+
+!!!============================================================
+interface curandDestroyGenerator
+subroutine curandDestroyGenerator(generator) &
+bind(C,name='curandDestroyGenerator')
+use iso_c_binding
+integer (c_size_t),value :: generator
+end subroutine curandDestroyGenerator
+end interface
+
+end module curand_m

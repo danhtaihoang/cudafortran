@@ -1,0 +1,41 @@
+MODULE ex6_mod
+CONTAINS
+ATTRIBUTES(GLOBAL) SUBROUTINE sumation(a,d)
+IMPLICIT NONE
+INTEGER,INTENT(in) :: a(:)
+INTEGER,INTENT(out):: d(:)
+INTEGER :: i,j,n
+
+i = blockDim%x*(blockIdx%x-1)+threadIdx%x
+n=size(a)
+IF (i<=n) THEN
+   d(i)=0
+   DO j=1,1000000000
+	   d(i) = d(i)+ a(i)
+   END DO
+
+END IF
+END SUBROUTINE sumation
+END MODULE ex6_mod 
+
+!!==========================================
+PROGRAM ex6_presentation
+USE cudafor
+USE ex6_mod
+IMPLICIT NONE
+INTEGER, PARAMETER :: n = 5002
+INTEGER :: a(n),d(n)
+INTEGER, device :: a_d(n),d_d(n)
+INTEGER :: tpb=1000
+a = 1
+a_d=a
+CALL sumation <<<ceiling(real(n)/tpb),tpb>>>(a_d,d_d)
+d=d_d
+IF(all(d==1000000000)) THEN
+      WRITE(* ,*)'**** OK ****'
+ELSE
+      WRITE(* ,*)'Program Failed'
+END IF
+END PROGRAM ex6_presentation
+
+
